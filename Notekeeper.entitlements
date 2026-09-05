@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Micro (AUHAL entrée) et audio système (Core Audio process tap). Sans cet entitlement,
+	     sous hardened runtime, macOS refuse EN SILENCE : échantillons à zéro, aucune erreur.
+	     Vérifié sur VoxPrompt le 20/08/2026, cf mémoire reference_macos_hardened_runtime_tcc. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<!-- Calendrier (EventKit) pour les titres et invités des réunions. -->
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
+</dict>
+</plist>
