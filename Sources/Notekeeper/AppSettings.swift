@@ -59,7 +59,7 @@ extension AudioPermissions {
         let sound = NSSound(named: "Glass")
         sound?.volume = 0.4
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { sound?.play() }
-        let verdict = await probeSystemAudio(duration: 1.5)
+        let verdict = await probeSystemAudio(duration: 1.5, includeOwnProcess: true)
         return verdict == .granted
     }
 }

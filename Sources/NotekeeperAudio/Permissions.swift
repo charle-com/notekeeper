@@ -61,12 +61,15 @@ public enum AudioPermissions {
 
     /// Tap d'essai d'une seconde (par défaut). Déclenche la boîte système la première fois.
     /// À appeler hors du main thread de préférence : bloque `duration`.
-    public static func probeSystemAudio(duration: TimeInterval = 1.0) async -> SystemAudioVerdict {
+    /// `includeOwnProcess` : ne pas exclure notre propre process du tap, pour qu'un son joué par
+    /// l'app elle-même pendant la sonde soit capturé (sinon la sonde ne prouve rien sans son externe).
+    public static func probeSystemAudio(duration: TimeInterval = 1.0, includeOwnProcess: Bool = false) async -> SystemAudioVerdict {
         guard #available(macOS 14.2, *) else { return .denied("macOS 14.2 minimum") }
         return await withCheckedContinuation { (cont: CheckedContinuation<SystemAudioVerdict, Never>) in
             DispatchQueue.global(qos: .userInitiated).async {
                 var options = SystemTapOptions.fromEnvironment()
                 options.autoStart = false
+                if includeOwnProcess { options.excludeOwnProcess = false }
                 let tap = SystemAudioTap(options: options)
                 do {
                     try tap.start()
