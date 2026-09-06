@@ -15,6 +15,7 @@ APP_DIR="${BUILD_DIR}/${APP_NAME}.app"
 MACOS_DIR="${APP_DIR}/Contents/MacOS"
 RES_DIR="${APP_DIR}/Contents/Resources"
 CONFIG="release"
+SCRATCH="${SCRATCH:-.build}"
 DO_INSTALL=0
 for a in "$@"; do
   case "$a" in
@@ -36,9 +37,9 @@ VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resour
 echo "==> ${APP_NAME} ${VERSION} (${CONFIG})"
 
 echo "==> Compilation Swift…"
-"${SWIFT_BIN}" build -c "${CONFIG}" --arch arm64 --product "${PRODUCT}"
-"${SWIFT_BIN}" build -c "${CONFIG}" --arch arm64 --product notekeeper-mcp
-BIN_DIR="$("${SWIFT_BIN}" build -c "${CONFIG}" --arch arm64 --product "${PRODUCT}" --show-bin-path)"
+"${SWIFT_BIN}" build --scratch-path "${SCRATCH}" -c "${CONFIG}" --arch arm64 --product "${PRODUCT}"
+"${SWIFT_BIN}" build --scratch-path "${SCRATCH}" -c "${CONFIG}" --arch arm64 --product notekeeper-mcp
+BIN_DIR="$("${SWIFT_BIN}" build --scratch-path "${SCRATCH}" -c "${CONFIG}" --arch arm64 --product "${PRODUCT}" --show-bin-path)"
 BIN_PATH="${BIN_DIR}/${PRODUCT}"
 [[ -x "${BIN_PATH}" ]] || fail "Binaire introuvable : ${BIN_PATH}"
 

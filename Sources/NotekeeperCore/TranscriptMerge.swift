@@ -84,3 +84,51 @@ public enum TranscriptMerge {
         segments.filter { $0.end >= now - seconds }.sorted { $0.start < $1.start }
     }
 }
+
+// MARK: - Écho acoustique
+
+extension TranscriptMerge {
+
+    /// Mots normalisés (minuscules, sans accents ni ponctuation) pour comparer deux textes.
+    static func words(_ s: String) -> [String] {
+        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "fr"))
+            .lowercased()
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .map(String.init)
+            .filter { $0.count > 1 }
+    }
+
+    /// Part des mots de `mic` que l'on retrouve dans `others` (0…1).
+    static func overlapRatio(mic: String, others: String) -> Double {
+        let m = words(mic)
+        guard m.count >= 3 else { return 0 }
+        let o = Set(words(others))
+        let shared = m.filter { o.contains($0) }.count
+        return Double(shared) / Double(m.count)
+    }
+
+    /// Vrai si le segment micro est l'écho acoustique de la piste système (le micro a entendu les
+    /// haut-parleurs) : même fenêtre de temps et texte quasi identique.
+    public static func isEcho(_ mic: TranscriptSegment, against system: [TranscriptSegment],
+                              tolerance: TimeInterval = 2.0, threshold: Double = 0.6) -> Bool {
+        guard mic.track == .mic else { return false }
+        let near = system.filter { $0.track == .system && $0.end >= mic.start - tolerance && $0.start <= mic.end + tolerance }
+        guard !near.isEmpty else { return false }
+        let others = near.map(\.text).joined(separator: " ")
+        return overlapRatio(mic: mic.text, others: others) >= threshold
+    }
+
+    /// Retire les segments micro qui ne sont que l'écho de la piste système.
+    public static func removeEcho(_ segments: [TranscriptSegment], tolerance: TimeInterval = 2.0,
+                                  threshold: Double = 0.6) -> [TranscriptSegment] {
+        let system = segments.filter { $0.track == .system }
+        return segments.filter { !isEcho($0, against: system, tolerance: tolerance, threshold: threshold) }
+    }
+
+    /// Nettoyage d'un texte de segment : espaces, tirets de dialogue en tête laissés par Whisper.
+    public static func cleanText(_ s: String) -> String {
+        var t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        while t.hasPrefix("- ") || t.hasPrefix("– ") { t = String(t.dropFirst(2)).trimmingCharacters(in: .whitespaces) }
+        return t
+    }
+}

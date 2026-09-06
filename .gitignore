@@ -4,3 +4,5 @@ build/
 .DS_Store
 .swiftpm/
 Resources/AppIcon.icns
+.build-*/
+:memory:*

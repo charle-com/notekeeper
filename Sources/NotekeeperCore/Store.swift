@@ -36,10 +36,14 @@ public final class Store: @unchecked Sendable {
 
     public init(url: URL) throws {
         self.url = url
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        // « :memory: » doit être passé tel quel à SQLite : `url.path` en ferait un fichier réel dans le dossier courant.
+        let inMemory = url.lastPathComponent == ":memory:"
+        if !inMemory {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        }
         var handle: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
-        guard sqlite3_open_v2(url.path, &handle, flags, nil) == SQLITE_OK, let handle else {
+        guard sqlite3_open_v2(inMemory ? ":memory:" : url.path, &handle, flags, nil) == SQLITE_OK, let handle else {
             let msg = handle.map { String(cString: sqlite3_errmsg($0)) } ?? "?"
             throw StoreError.open(msg)
         }

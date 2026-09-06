@@ -58,3 +58,19 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(TimeFormat.clock(3725), "1:02:05")
     }
 }
+
+final class EchoTests: XCTestCase {
+    func testEchoRemoval() {
+        let mid = UUID()
+        let sys = TranscriptSegment(meetingID: mid, track: .system, start: 10, end: 16, text: "Oui, livré mardi matin, 32 palettes. Il reste le contrôle de réception.")
+        let echo = TranscriptSegment(meetingID: mid, track: .mic, start: 11, end: 17, text: "oui livré mardi matin 32 palettes il reste le contrôle de réception")
+        let me = TranscriptSegment(meetingID: mid, track: .mic, start: 18, end: 22, text: "Parfait, on recale ça sur le prochain départ.")
+        let short = TranscriptSegment(meetingID: mid, track: .mic, start: 12, end: 13, text: "Oui")
+        XCTAssertTrue(TranscriptMerge.isEcho(echo, against: [sys]))
+        XCTAssertFalse(TranscriptMerge.isEcho(me, against: [sys]))
+        XCTAssertFalse(TranscriptMerge.isEcho(short, against: [sys]))
+        let kept = TranscriptMerge.removeEcho([sys, echo, me, short])
+        XCTAssertEqual(kept.map(\.text), [sys.text, me.text, short.text])
+        XCTAssertEqual(TranscriptMerge.cleanText("- Alexander, tu envoies ?  "), "Alexander, tu envoies ?")
+    }
+}

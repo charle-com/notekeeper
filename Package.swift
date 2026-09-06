@@ -23,11 +23,43 @@ let package = Package(
             name: "Notekeeper",
             dependencies: [
                 "NotekeeperCore",
+                "NotekeeperAudio",
+                "NotekeeperSpeech",
                 .product(name: "WhisperKit", package: "argmax-oss-swift"),
                 .product(name: "FluidAudio", package: "FluidAudio"),
             ],
             path: "Sources/Notekeeper",
             resources: [.copy("Assets")]
+        ),
+        // Capture audio : micro (AUHAL entrée seule) + audio système (process tap), WAV, niveaux,
+        // détection d'appel. Partagé entre l'app et l'outil de test notekeeper-audiotest.
+        .target(
+            name: "NotekeeperAudio",
+            dependencies: ["NotekeeperCore"],
+            path: "Sources/NotekeeperAudio"
+        ),
+        // Test de terrain de la capture : notekeeper-audiotest <dossier> [secondes].
+        .executableTarget(
+            name: "notekeeper-audiotest",
+            dependencies: ["NotekeeperAudio", "NotekeeperCore"],
+            path: "Sources/notekeeper-audiotest"
+        ),
+        // Parole : transcription Whisper on-device (WhisperKit) et diarisation (FluidAudio).
+        // Sans AppKit : partagé entre l'app et l'exécutable de test notekeeper-speechtest.
+        .target(
+            name: "NotekeeperSpeech",
+            dependencies: [
+                "NotekeeperCore",
+                .product(name: "WhisperKit", package: "argmax-oss-swift"),
+                .product(name: "FluidAudio", package: "FluidAudio"),
+            ],
+            path: "Sources/NotekeeperSpeech"
+        ),
+        // Banc d'essai parole : `live` (rejeu temps simulé) et `final` (passage final + diarisation).
+        .executableTarget(
+            name: "notekeeper-speechtest",
+            dependencies: ["NotekeeperCore", "NotekeeperSpeech"],
+            path: "Sources/notekeeper-speechtest"
         ),
         // Serveur MCP (stdio, JSON-RPC) : expose les réunions à Claude Code, Cursor, etc.
         .executableTarget(
