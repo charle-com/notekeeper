@@ -78,3 +78,14 @@ Réglages Système > Confidentialité et sécurité > Enregistrement audio syst�
   Un navigateur qui capture le micro hors appel (test micro d'un site) sera compté comme un appel.
 - Dérive entre horloges micro et sortie sur une longue réunion : compensée seulement au-delà de
   150 ms d'écart (recalage par silence), pas de rééchantillonnage fin.
+
+## Cadence de la sortie qui change en cours d'appel (1.1.1)
+
+Symptôme : piste système 2x trop rapide (voix aiguë, Whisper sort de l'islandais), blocs de 0,17 s suivis d'autant de
+zéros de recalage. Cause : `kAudioTapPropertyFormat` annonce une cadence périmée après un changement de cadence de la
+sortie (casque Bluetooth en mode appel, sortie basculée) ; l'agrégat livre à sa cadence nominale. Le tap recréé annonce
+ENCORE l'ancienne cadence. Correctif : format aligné sur `nominalSampleRate(aggregateID)`, écouteur de cadence sur la
+sortie, garde mesurée dans `TapIO.checkRate` (`NOTEKEEPER_TAP_RATE_LISTENER=0` pour la tester seule).
+Reproduction muette : `docs/tools/test-rate.sh <dossier>` (BlackHole en sortie, `audiodev rate` en plein
+enregistrement). Réparation d'un WAV déjà touché : `docs/tools/repair-2x.py`. Sortie « Périphérique à sortie
+multiple » : le tap capture du silence, connu, non corrigé.
