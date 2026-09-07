@@ -14,6 +14,8 @@ public struct SystemTapOptions {
     /// Mettre la sortie par défaut en sous-device de l'agrégat (elle fournit l'horloge).
     /// À false, l'agrégat ne contient que le tap.
     public var includeOutputSubDevice = true
+    /// Recréer le tap quand la sortie change de cadence nominale (sinon seule la garde mesurée corrige).
+    public var rebuildOnRateChange = true
     public init() {}
     /// Surcharge par variables d'environnement (NOTEKEEPER_TAP_AUTOSTART=1,
     /// NOTEKEEPER_TAP_SUBDEVICE=0), pour les essais de terrain.
@@ -22,6 +24,7 @@ public struct SystemTapOptions {
         let env = ProcessInfo.processInfo.environment
         if let v = env["NOTEKEEPER_TAP_AUTOSTART"] { o.autoStart = v == "1" }
         if let v = env["NOTEKEEPER_TAP_SUBDEVICE"] { o.includeOutputSubDevice = v == "1" }
+        if let v = env["NOTEKEEPER_TAP_RATE_LISTENER"] { o.rebuildOnRateChange = v == "1" }
         return o
     }
 }
@@ -72,6 +75,7 @@ public final class SystemAudioTap: @unchecked Sendable {
         self.excludeOwnProcess = options.excludeOwnProcess
         self.autoStart = options.autoStart
         self.includeOutputSubDevice = options.includeOutputSubDevice
+        self.rebuildOnRateChange = options.rebuildOnRateChange
         queueKey = DispatchSpecificKey<Void>()
         stateQueue.setSpecific(key: queueKey, value: ())
     }
@@ -107,6 +111,7 @@ public final class SystemAudioTap: @unchecked Sendable {
     private let excludeOwnProcess: Bool
     private let autoStart: Bool
     private let includeOutputSubDevice: Bool
+    private let rebuildOnRateChange: Bool
     private let stateQueue = DispatchQueue(label: "fr.charlesneveu.notekeeper.tap.state")
     private let processQueue = DispatchQueue(label: "fr.charlesneveu.notekeeper.tap.process", qos: .userInitiated)
     private let queueKey: DispatchSpecificKey<Void>
@@ -125,6 +130,8 @@ public final class SystemAudioTap: @unchecked Sendable {
     private var io: TapIO?
 
     private var listener: (AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)?
+    /// Cadence nominale de la sortie : un changement (casque qui passe en mode appel) recrée le tap.
+    private var rateListener: (AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)?
     private var rebuildWork: DispatchWorkItem?
 
     private static let poolSize = 16
@@ -211,7 +218,18 @@ public final class SystemAudioTap: @unchecked Sendable {
     }
 
     private func startIOUnsafe() throws {
-        guard let fmt = tapFormat else { throw AudioCaptureError(61, "Format du tap illisible") }
+        guard var fmt = tapFormat else { throw AudioCaptureError(61, "Format du tap illisible") }
+        // Le tap annonce parfois une cadence périmée (sortie qui vient de changer de cadence) :
+        // c'est l'agrégat qui cadence les buffers livrés, sa cadence nominale fait foi.
+        if let rate = CoreAudioProps.nominalSampleRate(aggregateID), rate > 0, abs(rate - fmt.sampleRate) > 1 {
+            var asbd = fmt.streamDescription.pointee
+            asbd.mSampleRate = rate
+            if let fixed = AVAudioFormat(streamDescription: &asbd) {
+                AudioLog.log(String(format: "tap : l'agrégat tourne à %.0f Hz, le tap annonçait %.0f Hz, format aligné", rate, fmt.sampleRate))
+                fmt = fixed
+                tapFormat = fixed
+            }
+        }
         guard let resampler = Resampler(from: fmt) else {
             throw AudioCaptureError(65, "Conversion \(CoreAudioProps.describe(fmt)) vers 16 kHz mono impossible")
         }
@@ -220,6 +238,7 @@ public final class SystemAudioTap: @unchecked Sendable {
         }
         let io = TapIO(format: fmt, pool: pool, resampler: resampler, queue: processQueue, bufferIndex: tapBufferIndex)
         io.deliver = _onChunk
+        io.warn = { [weak self] m in self?.stateQueue.async { self?._onWarning?(m) } }
         self.io = io
 
         var procID: AudioDeviceIOProcID?
@@ -276,6 +295,28 @@ public final class SystemAudioTap: @unchecked Sendable {
         if AudioObjectAddPropertyListenerBlock(CoreAudioProps.system, &addr, stateQueue, block) == noErr {
             listener = (addr, block)
         }
+        installRateListener()
+    }
+
+    private func installRateListener() {
+        removeRateListener()
+        guard rebuildOnRateChange, outputDeviceID != kAudioObjectUnknown else { return }
+        var addr = CoreAudioProps.address(kAudioDevicePropertyNominalSampleRate)
+        let device = outputDeviceID
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            self?.rateChangedUnsafe(device: device)
+        }
+        if AudioObjectAddPropertyListenerBlock(device, &addr, stateQueue, block) == noErr {
+            rateListener = (device, addr, block)
+        }
+    }
+
+    private func removeRateListener() {
+        if let (device, address, block) = rateListener {
+            var addr = address
+            AudioObjectRemovePropertyListenerBlock(device, &addr, stateQueue, block)
+        }
+        rateListener = nil
     }
 
     private func removeListener() {
@@ -284,8 +325,19 @@ public final class SystemAudioTap: @unchecked Sendable {
             AudioObjectRemovePropertyListenerBlock(CoreAudioProps.system, &addr, stateQueue, block)
         }
         listener = nil
+        removeRateListener()
         rebuildWork?.cancel()
         rebuildWork = nil
+    }
+
+    private func rateChangedUnsafe(device: AudioDeviceID) {
+        guard running, device == outputDeviceID else { return }
+        let rate = CoreAudioProps.nominalSampleRate(device) ?? 0
+        AudioLog.log(String(format: "tap : la sortie %@ passe à %.0f Hz, recréation", _outputName, rate))
+        rebuildWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.rebuildUnsafe() }
+        rebuildWork = work
+        stateQueue.asyncAfter(deadline: .now() + 0.4, execute: work)
     }
 
     private func outputChangedUnsafe() {
@@ -303,6 +355,7 @@ public final class SystemAudioTap: @unchecked Sendable {
         teardownUnsafe()
         do {
             try buildUnsafe()
+            installRateListener()
             AudioLog.log("tap recréé sur \(_outputName)")
             _onWarning?("Audio système basculé sur \(_outputName)")
         } catch {
@@ -318,15 +371,35 @@ public final class SystemAudioTap: @unchecked Sendable {
 /// Copie sans allocation puis dispatch vers `queue` (série) où tournent conversion et livraison.
 @available(macOS 14.2, *)
 private final class TapIO {
-    let format: AVAudioFormat
+    private(set) var format: AVAudioFormat
     let pool: BufferPool
-    let resampler: Resampler
+    private(set) var resampler: Resampler
     let queue: DispatchQueue
     let bufferIndex: Int
-    let bytesPerFrame: Int
+    private var _bytesPerFrame: Int
+    var bytesPerFrame: Int { statsLock.withLock { _bytesPerFrame } }
     var deliver: ((AudioChunk) -> Void)?
+    var warn: ((String) -> Void)?
     var closed = false
     private var first = true
+
+    // Garde de cadence : le format annoncé par le tap peut ne pas être celui que l'agrégat livre
+    // (sortie qui change de cadence en cours d'appel, casque Bluetooth qui passe en mode appel à
+    // 24 kHz, flux mono derrière un format stéréo). Sans correction, l'audio est lu trop vite ou trop
+    // lentement et l'horloge commune bourre de silence. On mesure sur les horodatages du HAL et on
+    // reconstruit le convertisseur dès que la mesure s'écarte de plus de 3 % du format annoncé.
+    private struct RateWindow {
+        var firstHost: UInt64 = 0, lastHost: UInt64 = 0
+        var firstSample: Double = 0, lastSample: Double = 0, sampleValid = true
+        var frames = 0, callbacks = 0
+        mutating func reset() { self = RateWindow() }
+    }
+    private var window = RateWindow()
+    private var corrections = 0
+    /// Format des buffers du pool (celui de la construction). Après une correction, `format` diffère
+    /// et chaque buffer est recopié dans un buffer au format corrigé avant conversion.
+    private let poolFormat: AVAudioFormat
+    private static let standardRates: [Double] = [8_000, 11_025, 16_000, 22_050, 24_000, 32_000, 44_100, 48_000, 88_200, 96_000, 176_400, 192_000]
 
     private let statsLock = UnfairLock()
     private var _callbacks = 0
@@ -339,7 +412,8 @@ private final class TapIO {
     init(format: AVAudioFormat, pool: BufferPool, resampler: Resampler, queue: DispatchQueue, bufferIndex: Int) {
         self.format = format; self.pool = pool; self.resampler = resampler
         self.queue = queue; self.bufferIndex = bufferIndex
-        self.bytesPerFrame = Int(format.streamDescription.pointee.mBytesPerFrame)
+        self.poolFormat = format
+        self._bytesPerFrame = Int(format.streamDescription.pointee.mBytesPerFrame)
     }
 
     /// Thread IO : copie du buffer du tap dans un buffer du pool.
@@ -351,12 +425,16 @@ private final class TapIO {
         // Index prévu, sinon le dernier buffer (les taps ferment la liste).
         let index = bufferIndex < count ? bufferIndex : count - 1
         let src = abl[index]
+        let bytesPerFrame = self.bytesPerFrame
         guard let data = src.mData, bytesPerFrame > 0 else { return }
         let frames = Int(src.mDataByteSize) / bytesPerFrame
         guard frames > 0, let buf = pool.acquire() else {
             statsLock.withLock { _starved += 1 }
             return
         }
+        let ts = inputTime.pointee
+        let sampleValid = ts.mFlags.contains(.sampleTimeValid)
+        let sampleTime = ts.mSampleTime
         let n = min(frames, Int(buf.frameCapacity))
         buf.frameLength = AVAudioFrameCount(n)
         let dst = UnsafeMutableAudioBufferListPointer(buf.mutableAudioBufferList)
@@ -373,13 +451,14 @@ private final class TapIO {
             }
         }
         let host = HostClock.hostTime(of: inputTime)
-        queue.async { self.process(buf, hostTime: host) }
+        queue.async { self.process(buf, hostTime: host, frames: frames, sampleTime: sampleTime, sampleValid: sampleValid) }
     }
 
-    func process(_ buffer: AVAudioPCMBuffer, hostTime: UInt64) {
+    func process(_ buffer: AVAudioPCMBuffer, hostTime: UInt64, frames: Int, sampleTime: Double, sampleValid: Bool) {
         defer { pool.release(buffer) }
         guard !closed else { return }
-        let samples = resampler.convert(buffer)
+        checkRate(hostTime: hostTime, frames: frames, sampleTime: sampleTime, sampleValid: sampleValid)
+        let samples = resampler.convert(format == poolFormat ? buffer : rebuffer(buffer))
         guard !samples.isEmpty else { return }
         var nz = 0
         for s in samples where s != 0 { nz += 1 }
@@ -387,5 +466,79 @@ private final class TapIO {
         let chunk = AudioChunk(samples: samples, hostTime: hostTime, discontinuity: first)
         first = false
         deliver?(chunk)
+    }
+
+    /// Copie un buffer du pool dans un buffer au format corrigé (mêmes octets, nouvelle description).
+    private func rebuffer(_ src: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
+        let n = src.frameLength
+        guard n > 0, let dst = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: n) else { return src }
+        dst.frameLength = n
+        let s = UnsafeMutableAudioBufferListPointer(src.mutableAudioBufferList)
+        let d = UnsafeMutableAudioBufferListPointer(dst.mutableAudioBufferList)
+        for c in 0..<min(s.count, d.count) {
+            let bytes = min(Int(s[c].mDataByteSize), Int(d[c].mDataByteSize))
+            if let sp = s[c].mData, let dp = d[c].mData, bytes > 0 { dp.copyMemory(from: sp, byteCount: bytes) }
+            d[c].mDataByteSize = UInt32(bytes)
+        }
+        return dst
+    }
+
+    /// Fenêtres d'une seconde : cadence réelle = trames livrées par seconde d'horloge hôte
+    /// (ou progression de `mSampleTime`, qui suit la cadence de l'agrégat quand elle est valide).
+    private func checkRate(hostTime: UInt64, frames: Int, sampleTime: Double, sampleValid: Bool) {
+        if window.callbacks == 0 {
+            window.firstHost = hostTime; window.firstSample = sampleTime
+        }
+        window.lastHost = hostTime; window.lastSample = sampleTime
+        window.sampleValid = window.sampleValid && sampleValid
+        window.callbacks += 1
+        // Le dernier bloc n'est pas encore écoulé : on compte les trames des blocs précédents.
+        let seconds = HostClock.seconds(from: window.firstHost, to: window.lastHost)
+        guard seconds >= 1.0, window.callbacks >= 4 else { window.frames += frames; return }
+        let counted = Double(window.frames)
+        let byHost = counted / seconds
+        let sampleDelta = window.lastSample - window.firstSample
+        // Horloge d'échantillons repartie de zéro (agrégat recréé, cadence changée) : fenêtre invalide.
+        let sampleUsable = window.sampleValid && sampleDelta > 0
+        let bySample = sampleUsable ? sampleDelta / seconds : byHost
+        let sampleRatio = counted > 0 && sampleUsable ? sampleDelta / counted : 1
+        window.reset()
+        window.frames = frames
+        guard bySample >= 4_000, bySample <= 400_000 else { return }
+
+        let announced = format.sampleRate
+        var channels = format.channelCount
+        // Deux fois plus d'échantillons de temps que de trames comptées : les octets par trame sont
+        // deux fois trop grands, le flux est mono derrière un format stéréo (ou l'inverse).
+        if sampleRatio > 1.9, sampleRatio < 2.1, channels == 2 { channels = 1 }
+        else if sampleRatio > 0.45, sampleRatio < 0.55, channels == 1 { channels = 2 }
+        let measured = bySample
+        let snapped = Self.standardRates.first(where: { abs($0 - measured) / $0 < 0.02 }) ?? measured
+        let rateOK = abs(snapped - announced) / announced <= 0.03
+        guard !rateOK || channels != format.channelCount else { return }
+        guard corrections < 8 else { return }
+        corrections += 1
+
+        var asbd = format.streamDescription.pointee
+        asbd.mSampleRate = snapped
+        if channels != format.channelCount {
+            let bytesPerChannel = asbd.mBytesPerFrame / max(1, asbd.mChannelsPerFrame)
+            asbd.mChannelsPerFrame = channels
+            if asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved == 0 {
+                asbd.mBytesPerFrame = bytesPerChannel * channels
+                asbd.mBytesPerPacket = asbd.mBytesPerFrame * asbd.mFramesPerPacket
+            }
+        }
+        guard let corrected = AVAudioFormat(streamDescription: &asbd), let r = Resampler(from: corrected) else {
+            AudioLog.log(String(format: "tap : cadence mesurée %.0f Hz (annoncée %.0f), correction impossible", measured, announced))
+            return
+        }
+        let before = CoreAudioProps.describe(format)
+        format = corrected
+        resampler = r
+        statsLock.withLock { _bytesPerFrame = Int(asbd.mBytesPerFrame) }
+        AudioLog.log(String(format: "tap : cadence réelle %.0f Hz (mesure hôte %.0f, ratio trames %.2f), format corrigé %@ -> %@",
+                            measured, byHost, sampleRatio, before, CoreAudioProps.describe(corrected)))
+        warn?("Cadence de l'audio système corrigée (\(Int(snapped)) Hz au lieu de \(Int(announced)))")
     }
 }

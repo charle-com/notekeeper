@@ -138,6 +138,14 @@ enum CoreAudioProps {
         return status == noErr ? asbd : nil
     }
 
+    static func nominalSampleRate(_ device: AudioObjectID) -> Double? {
+        var addr = address(kAudioDevicePropertyNominalSampleRate)
+        guard AudioObjectHasProperty(device, &addr) else { return nil }
+        var value: Double = 0
+        var size = UInt32(MemoryLayout<Double>.size)
+        return AudioObjectGetPropertyData(device, &addr, 0, nil, &size, &value) == noErr ? value : nil
+    }
+
     static func defaultInputDevice() -> AudioDeviceID? { objectID(system, kAudioHardwarePropertyDefaultInputDevice) }
     static func defaultOutputDevice() -> AudioDeviceID? { objectID(system, kAudioHardwarePropertyDefaultOutputDevice) }
 

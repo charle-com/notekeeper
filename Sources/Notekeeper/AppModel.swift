@@ -362,6 +362,20 @@ final class AppModel: ObservableObject {
         exportIfWanted(m)
     }
 
+    /// Retraite l'audio conservé d'une réunion : retranscription, locuteurs, noms, résumé, titre.
+    /// Utile après une correction des WAV ou une mise à jour des moteurs.
+    func reprocess(meeting: Meeting) {
+        guard recording == nil, processing[meeting.id] == nil else { return }
+        let mic = meeting.micAudioPath.map { URL(fileURLWithPath: $0) }
+        let sys = meeting.systemAudioPath.map { URL(fileURLWithPath: $0) }
+        guard [mic, sys].compactMap({ $0 }).contains(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
+            show(.warning, "Aucun audio conservé pour cette réunion."); return
+        }
+        var m = meeting; m.status = .processing
+        try? store.update(m); reloadMeetings()
+        Task { await postProcess(meetingID: meeting.id, micWAV: mic, systemWAV: sys) }
+    }
+
     /// Relance noms + résumé sur une réunion existante (après correction manuelle des locuteurs, par exemple).
     func regenerate(meeting: Meeting) {
         Task {

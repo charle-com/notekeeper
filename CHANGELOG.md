@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.1 (2026-09-07)
+
+Correctif de capture.
+
+- Audio système enregistré 2x trop vite quand la sortie change de cadence pendant l'appel (casque Bluetooth qui passe en mode appel, sortie qui bascule) : le tap gardait le format annoncé à sa création alors que l'agrégat livrait à une autre cadence, et l'horloge commune bourrait la piste de silence. Le tap s'aligne désormais sur la cadence nominale de l'agrégat, se recrée quand la sortie change de cadence, et une garde mesurée sur les horodatages du HAL corrige le convertisseur si la cadence ou le nombre de canaux réels diffèrent encore.
+- Menu Fichier, « Retraiter l'audio de la réunion » : retranscription, locuteurs, noms et résumé à partir des WAV conservés. Variante sans interface : `NOTEKEEPER_REPROCESS=<id>`.
+- Sortie « Périphérique à sortie multiple » (agrégat macOS) : le tap ne capture rien, connu, non corrigé.
+
 ## 1.1.0 (2026-09-07)
 
 Version légère.

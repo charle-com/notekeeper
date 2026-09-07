@@ -26,6 +26,8 @@ struct NotekeeperApp: App {
                 Button("Exporter en markdown") { if let m = model.selectedMeeting { model.export(m) } }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                     .disabled(model.selectedMeeting == nil)
+                Button("Retraiter l'audio de la réunion") { if let m = model.selectedMeeting { model.reprocess(meeting: m) } }
+                    .disabled(model.selectedMeeting == nil || model.isRecording || model.selectedMeeting?.micAudioPath == nil)
             }
             CommandGroup(after: .toolbar) {
                 Button("Qu'est-ce que j'ai raté ?") { model.catchUp() }
@@ -71,6 +73,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let center = UNUserNotificationCenter.current()
         center.delegate = self
         center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        // Retraitement sans interface : `NOTEKEEPER_REPROCESS=<id de réunion>` puis sortie.
+        if let raw = ProcessInfo.processInfo.environment["NOTEKEEPER_REPROCESS"], let id = UUID(uuidString: raw) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                guard let model = self?.model, let m = try? model.store.meeting(id) else { NSApp.terminate(nil); return }
+                let mic = m.micAudioPath.map { URL(fileURLWithPath: $0) }
+                let sys = m.systemAudioPath.map { URL(fileURLWithPath: $0) }
+                Task { @MainActor in
+                    await model.postProcess(meetingID: id, micWAV: mic, systemWAV: sys)
+                    let done = (try? model.store.meeting(id))?.status
+                    FileHandle.standardError.write(Data("retraitement terminé : \(done.map { "\($0)" } ?? "?")\n".utf8))
+                    NSApp.terminate(nil)
+                }
+            }
+        }
         if let dir = AppSettings.qaDirectory {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 guard let model = self?.model else { return }
