@@ -80,6 +80,7 @@ final class MockSpeechEngine: SpeechEngine {
 
     func feed(track: Track, samples: [Float], at time: TimeInterval) {}
     func stopLive() async { timer?.invalidate(); timer = nil }
+    func release() async {}
 
     func finalPass(meetingID: UUID, language: String, dictionary: [String], micWAV: URL?, systemWAV: URL?,
                    progress: @escaping (String) -> Void) async throws -> (segments: [TranscriptSegment], spans: [DiarizedSpan]) {
@@ -115,6 +116,14 @@ final class MockAssistant: AssistantService {
         return """
         ## En bref
         Point logistique GreenLog et prix de la collection 26-27. Le camion 5 est livré, le camion 4 annulé. Bilan Bradery lundi.
+
+        ## Qui a dit quoi
+        ### Toi
+        - Tu recales les Berlin bleu grisé sur le prochain départ et tu envoies le classeur prix ce soir.
+        ### Hélène
+        - Camion 5 livré mardi, 32 palettes ; contrôle de réception jeudi ; bilan Bradery lundi.
+        ### Alexander
+        - Envoie l'attendu ShippingBo cet après-midi ; demande si les prix partent de la marge.
 
         ## Décisions
         - Les prix 26-27 partent de la marge, par format (lot de 3, lot de 2, unité).

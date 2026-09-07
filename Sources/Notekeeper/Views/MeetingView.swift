@@ -161,10 +161,15 @@ struct LiveBar: View {
                 .frame(width: 220)
                 Spacer()
                 Text(model.capture.micDeviceName).font(.system(size: 11)).foregroundStyle(.secondary)
-                Button { model.catchUp() } label: {
-                    if model.catchUpBusy { ProgressView().controlSize(.small) } else { Label("Qu'est-ce que j'ai raté ?", systemImage: "clock.arrow.circlepath") }
+                if model.liveEnabled {
+                    Button { model.catchUp() } label: {
+                        if model.catchUpBusy { ProgressView().controlSize(.small) } else { Label("Qu'est-ce que j'ai raté ?", systemImage: "clock.arrow.circlepath") }
+                    }
+                    .disabled(model.catchUpBusy)
+                } else {
+                    Label("Compte rendu à la fin de l'appel", systemImage: "text.badge.checkmark")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
-                .disabled(model.catchUpBusy)
             }
             if let t = model.catchUpText {
                 HStack(alignment: .top, spacing: 8) {

@@ -27,7 +27,8 @@ struct WelcomeView: View {
                     checkingSystem = true
                     Task { systemAudio = await AudioPermissions.probeWithSound(); checkingSystem = false }
                 }
-                step(done: model.engineReady, "Modèle Whisper", model.engineStatus) {}
+                step(done: model.engineReady, "Transcription Whisper",
+                     model.liveEnabled ? model.engineStatus : "Locale, lancée à la fin de chaque appel : rien ne tourne pendant.") {}
             }
 
             GroupBox {

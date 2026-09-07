@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0 (2026-09-07)
+
+Version légère.
+
+- La transcription pendant l'appel est désactivée par défaut (réglage « Transcrire pendant l'appel » dans Général). Pendant l'appel, seul l'audio est enregistré : aucun modèle chargé, aucune inférence.
+- Whisper et la diarisation se chargent à la fin de l'appel pour le passage final, puis se déchargent une fois le compte rendu produit (`SpeechEngine.release`). Mémoire au repos et pendant l'appel : celle d'une app vide.
+- Le compte rendu gagne une section « Qui a dit quoi » : un bloc par personne, ses annonces, demandes et engagements.
+- Le bouton et le raccourci « Qu'est-ce que j'ai raté ? » n'apparaissent que si la transcription pendant l'appel est activée.
+
 ## 1.0.0 (2026-09-06)
 
 Première version.

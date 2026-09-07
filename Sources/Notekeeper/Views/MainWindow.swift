@@ -30,8 +30,10 @@ struct MainWindow: View {
     private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             if model.isRecording {
-                Button { model.catchUp() } label: { Label("Qu'est-ce que j'ai raté ?", systemImage: "clock.arrow.circlepath") }
-                    .help("Résumé des dernières minutes")
+                if model.liveEnabled {
+                    Button { model.catchUp() } label: { Label("Qu'est-ce que j'ai raté ?", systemImage: "clock.arrow.circlepath") }
+                        .help("Résumé des dernières minutes")
+                }
                 Button { Task { await model.stopMeeting() } } label: { Label("Terminer", systemImage: "stop.circle.fill") }
                     .tint(NK.live)
             } else {

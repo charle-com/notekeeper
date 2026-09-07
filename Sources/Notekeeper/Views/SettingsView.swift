@@ -25,6 +25,7 @@ struct GeneralSettings: View {
     @State private var keepAudio = AppSettings.keepAudio
     @State private var catchUp = AppSettings.catchUpWindow
     @State private var askOnCall = AppSettings.askBeforeRecordingCalls
+    @State private var live = AppSettings.liveTranscription
 
     var body: some View {
         Form {
@@ -32,9 +33,13 @@ struct GeneralSettings: View {
             Picker("Langue des réunions", selection: $language) {
                 Text("Français").tag("fr"); Text("Anglais").tag("en"); Text("Détection automatique").tag("auto")
             }.onChange(of: language) { AppSettings.language = $0 }
+            Toggle("Transcrire pendant l'appel", isOn: $live).onChange(of: live) { model.setLiveTranscription($0) }
+            Text(live ? "Whisper reste chargé en permanence (environ 1 Go de mémoire) pour le transcript en direct et « Qu'est-ce que j'ai raté ? »."
+                      : "Pendant l'appel, seul l'audio est enregistré. Whisper se charge à la fin, produit le transcript et le compte rendu, puis se décharge.")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
             Picker("Fenêtre « Qu'est-ce que j'ai raté ? »", selection: $catchUp) {
                 Text("2 minutes").tag(120); Text("3 minutes").tag(180); Text("5 minutes").tag(300); Text("10 minutes").tag(600)
-            }.onChange(of: catchUp) { AppSettings.catchUpWindow = $0 }
+            }.onChange(of: catchUp) { AppSettings.catchUpWindow = $0 }.disabled(!live)
             Toggle("Proposer d'enregistrer quand un appel est détecté", isOn: $askOnCall).onChange(of: askOnCall) { AppSettings.askBeforeRecordingCalls = $0 }
             Divider()
             LabeledContent("Dossier d'export markdown") {

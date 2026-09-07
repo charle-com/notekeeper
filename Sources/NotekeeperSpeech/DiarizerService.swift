@@ -24,6 +24,12 @@ public final class DiarizerService: @unchecked Sendable {
 
     public var isReady: Bool { lock.withLock { manager != nil } }
 
+    /// Décharge les modèles de diarisation ; `prepare` les recharge depuis le disque.
+    public func unload() {
+        let had: Bool = lock.withLock { let h = manager != nil; manager = nil; return h }
+        if had { SpeechLog.log("diarisation déchargée") }
+    }
+
     /// Charge (et télécharge si besoin) les modèles. Faux en cas d'échec, jamais d'erreur.
     @discardableResult
     public func prepare(progress: @escaping (String) -> Void) async -> Bool {

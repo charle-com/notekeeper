@@ -30,7 +30,7 @@ struct NotekeeperApp: App {
             CommandGroup(after: .toolbar) {
                 Button("Qu'est-ce que j'ai raté ?") { model.catchUp() }
                     .keyboardShortcut("m", modifiers: [.command, .shift])
-                    .disabled(!model.isRecording)
+                    .disabled(!model.isRecording || !model.liveEnabled)
             }
         }
         .defaultSize(width: 1180, height: 740)
@@ -106,7 +106,9 @@ struct MenuBarMenu: View {
     var body: some View {
         if let r = model.recording {
             Text("Enregistrement : \(TimeFormat.clock(r.elapsed))")
-            Button("Qu'est-ce que j'ai raté ?") { model.catchUp(); openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
+            if model.liveEnabled {
+                Button("Qu'est-ce que j'ai raté ?") { model.catchUp(); openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
+            }
             Button("Terminer la réunion") { Task { await model.stopMeeting() } }
         } else {
             Button("Enregistrer une réunion") { model.startMeeting(); openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }

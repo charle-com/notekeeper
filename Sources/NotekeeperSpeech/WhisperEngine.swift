@@ -307,6 +307,15 @@ public actor WhisperEngine {
         return pipeline
     }
 
+    /// Décharge le pipeline (poids CoreML, tampons ANE) : la mémoire revient au niveau d'une app vide.
+    /// Le profil de calcul retenu reste mémorisé, le prochain `prepare` recharge en quelques secondes.
+    public func unload() {
+        guard pipeline != nil else { return }
+        pipeline = nil
+        renewInferenceExecutor()
+        SpeechLog.log("Whisper déchargé")
+    }
+
     /// Après un timeout, l'instance est suspecte (un thread CoreML probablement figé) : on la jette.
     /// Deux gels consécutifs sur le même profil font passer au profil suivant au prochain chargement.
     private func poisonPipeline() {

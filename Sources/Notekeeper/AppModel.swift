@@ -56,6 +56,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var processing: [UUID: String] = [:]
     @Published private(set) var engineStatus: String = "Chargement du modèle…"
     @Published private(set) var engineReady = false
+    /// Transcription pendant l'appel. Sinon : WAV seuls pendant l'appel, moteurs chargés à la fin puis déchargés.
+    @Published private(set) var liveEnabled = AppSettings.liveTranscription
+    static let deferredStatus = "Transcription à la fin de l'appel"
     @Published private(set) var detectedCallApp: String?
     @Published var banner: Banner?
     @Published private(set) var catchUpText: String?
@@ -75,7 +78,7 @@ final class AppModel: ObservableObject {
         showWelcome = !AppSettings.onboardingDone
         calls.onChange = { [weak self] app in self?.callChanged(app) }
         calls.start()
-        Task { await prepareEngine() }
+        if liveEnabled { Task { await prepareEngine() } } else { engineReady = true; engineStatus = Self.deferredStatus }
         // Réunions restées « en cours » après un crash : on les ferme proprement.
         for m in meetings where m.status == .recording {
             var mm = m; mm.status = .failed; mm.endedAt = mm.endedAt ?? mm.updatedAt
@@ -95,6 +98,20 @@ final class AppModel: ObservableObject {
             engineReady = false
             engineStatus = "Modèle indisponible : \(error.localizedDescription)"
             show(.error, "Le modèle de transcription n'a pas pu être chargé. \(error.localizedDescription)")
+        }
+    }
+
+    /// Bascule du réglage « transcrire pendant l'appel ». Activé : Whisper se charge tout de suite.
+    /// Désactivé : les moteurs sont déchargés dès que rien ne tourne.
+    func setLiveTranscription(_ on: Bool) {
+        AppSettings.liveTranscription = on
+        liveEnabled = AppSettings.liveTranscription
+        guard recording == nil else { return }
+        if liveEnabled {
+            if !speech.isReady { engineReady = false; engineStatus = "Chargement du modèle…"; Task { await prepareEngine() } }
+        } else if processing.isEmpty {
+            Task { await speech.release() }
+            engineReady = true; engineStatus = Self.deferredStatus
         }
     }
 
@@ -207,8 +224,13 @@ final class AppModel: ObservableObject {
 
         let dictionary = ((try? store.dictionary()) ?? []).map(\.term)
         let meetingID = m.id
-        speech.startLive(meetingID: meetingID, language: m.language, dictionary: dictionary) { [weak self] event in
-            Task { @MainActor in self?.handle(event, meetingID: meetingID, meID: me.id) }
+        let live = liveEnabled
+        if live {
+            speech.startLive(meetingID: meetingID, language: m.language, dictionary: dictionary) { [weak self] event in
+                Task { @MainActor in self?.handle(event, meetingID: meetingID, meID: me.id) }
+            }
+        } else {
+            engineStatus = "Enregistrement, transcription à la fin"
         }
         capture.onLevels = { [weak self] mic, sys in
             guard let self, self.recording != nil else { return }
@@ -217,6 +239,7 @@ final class AppModel: ObservableObject {
         Task {
             do {
                 try await capture.start(micWAV: micWAV, systemWAV: sysWAV) { [weak self] track, samples, t in
+                    guard live else { return }
                     self?.speech.feed(track: track, samples: samples, at: t)
                 }
             } catch {
@@ -264,10 +287,10 @@ final class AppModel: ObservableObject {
         ticker?.invalidate(); ticker = nil
         rec.elapsed = Date().timeIntervalSince(rec.startedAt)
         await capture.stop()
-        await speech.stopLive()
+        if liveEnabled { await speech.stopLive() }
         capture.onLevels = nil
         recording = nil
-        engineStatus = "Transcription prête"
+        engineStatus = liveEnabled ? "Transcription prête" : Self.deferredStatus
         guard var m = try? store.meeting(rec.meetingID) else { return }
         m.endedAt = Date(); m.status = .processing
         try? store.update(m)
@@ -281,7 +304,7 @@ final class AppModel: ObservableObject {
     /// Retranscription complète, diarisation, attribution des locuteurs, noms, résumé, titre, export.
     func postProcess(meetingID: UUID, micWAV: URL?, systemWAV: URL?) async {
         guard var m = try? store.meeting(meetingID) else { return }
-        processing[meetingID] = "Retranscription…"
+        processing[meetingID] = liveEnabled ? "Retranscription…" : "Chargement de Whisper…"
         let dictionary = ((try? store.dictionary()) ?? []).map(\.term)
         let existing = (try? store.speakers(meetingID: meetingID)) ?? []
         let me = existing.first(where: { $0.isMe }) ?? {
@@ -332,6 +355,8 @@ final class AppModel: ObservableObject {
         }
         try? store.update(m)
         processing[meetingID] = nil
+        // Sans live, les moteurs ne servent plus : on rend la mémoire (600 Mo de poids et les tampons ANE).
+        if !liveEnabled, recording == nil, processing.isEmpty { await speech.release(); engineStatus = Self.deferredStatus }
         reloadMeetings()
         if selectedMeetingID == meetingID { loadSelected() }
         exportIfWanted(m)

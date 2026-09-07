@@ -19,4 +19,6 @@ public protocol SpeechEngine: AnyObject {
     /// `TranscriptMerge.assignSpeakers` qui les attribue.
     func finalPass(meetingID: UUID, language: String, dictionary: [String], micWAV: URL?, systemWAV: URL?,
                    progress: @escaping (String) -> Void) async throws -> (segments: [TranscriptSegment], spans: [DiarizedSpan])
+    /// Décharge les modèles (Whisper, diarisation) pour rendre la mémoire. `prepare` ou `finalPass` les rechargent.
+    func release() async
 }

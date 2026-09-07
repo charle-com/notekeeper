@@ -54,6 +54,12 @@ public final class WhisperSpeechEngine: SpeechEngine, @unchecked Sendable {
 
     public func finalPass(meetingID: UUID, language: String, dictionary: [String], micWAV: URL?, systemWAV: URL?,
                           progress: @escaping (String) -> Void) async throws -> (segments: [TranscriptSegment], spans: [DiarizedSpan]) {
+        // Sans transcription live, les moteurs ne sont pas chargés pendant l'appel : on le fait ici (idempotent).
+        if await !whisper.isLoaded { progress("Chargement de Whisper") }
+        try await whisper.prepare(progress: progress)
+        await diarizer.prepare(progress: progress)
+        lock.withLock { ready = true }
+
         var segments: [TranscriptSegment] = []
         var systemSamples: [Float]?
 
@@ -82,5 +88,12 @@ public final class WhisperSpeechEngine: SpeechEngine, @unchecked Sendable {
         }
         progress("Transcription finale terminée")
         return (segments.sorted { $0.start < $1.start }, spans)
+    }
+
+    public func release() async {
+        await stopLive()
+        await whisper.unload()
+        diarizer.unload()
+        lock.withLock { ready = false }
     }
 }

@@ -62,6 +62,14 @@ public final class MockLLM: LLMClient, @unchecked Sendable {
             ## En bref
             Cadrage de la refonte du site : périmètre, planning et budget validés, un point bloquant sur le nom de domaine.
 
+            ## Qui a dit quoi
+            ### Toi
+            - Tu valides le thème sur mesure sans slider et le budget de 10 000 EUR.
+            ### Priya
+            - Trois demandes de devis perdues le mois dernier ; elle présente la comparaison au client cette semaine.
+            ### Paul
+            - LCP de 4,5 s sur mobile ; il chiffre 18 jours, démarrage le 22 septembre.
+
             ## Décisions
             - Thème sur mesure sans slider, hébergement conservé.
             - Formulaire de devis avec double notification et suivi dans un Google Sheet.

@@ -22,7 +22,7 @@ public enum Prompts {
     """
 
     /// Sections attendues dans un résumé, dans l'ordre.
-    public static let summarySections = ["## En bref", "## Décisions", "## Par thème", "## Prochaines étapes", "## Questions ouvertes"]
+    public static let summarySections = ["## En bref", "## Qui a dit quoi", "## Décisions", "## Par thème", "## Prochaines étapes", "## Questions ouvertes"]
 
     // MARK: - Nommage des locuteurs
 
@@ -79,12 +79,18 @@ public enum Prompts {
         « toi : envoyer le devis »), jamais « Moi valide ». Désigne les autres par leur nom quand il est connu, \
         sinon par leur étiquette (« Locuteur 2 »).
 
-        Sortie : du markdown avec EXACTEMENT ces cinq sections, dans cet ordre, avec ces titres à l'identique, \
+        Sortie : du markdown avec EXACTEMENT ces six sections, dans cet ordre, avec ces titres à l'identique, \
         rien avant la première ni après la dernière :
 
         ## En bref
         Trois lignes au maximum : de quoi il s'agissait, où on en est. Si la transcription contient une marque \
         de passage omis, signale-le ici en une phrase.
+
+        ## Qui a dit quoi
+        Un sous-titre `###` par personne qui a parlé : d'abord l'utilisateur (sous-titre « Toi »), puis les autres \
+        dans l'ordre de leur première prise de parole, sous leur nom ou leur étiquette. Sous chaque personne, 2 à 6 \
+        puces courtes : ce qu'elle a annoncé, demandé, proposé, refusé ou pris en charge, avec ses chiffres et ses \
+        dates exacts. Uniquement ses propres paroles, jamais celles d'un autre.
 
         ## Décisions
         Une puce par décision réellement prise, pas les pistes seulement évoquées. Si aucune : une seule puce « aucune ».

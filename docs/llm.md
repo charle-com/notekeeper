@@ -17,7 +17,7 @@
 Règles de l'assistant :
 
 - `nameSpeakers` : un nom n'est posé que si `confidence >= 0.7`, jamais sur `isMe`, jamais par-dessus un nom existant. Le prompt reçoit les étiquettes techniques (« Moi », « Locuteur 2 »), les invités du calendrier et le dictionnaire personnel comme indices.
-- `summarize` : cinq sections imposées dans l'ordre (`## En bref`, `## Décisions`, `## Par thème`, `## Prochaines étapes`, `## Questions ouvertes`) ; une section manquante est ajoutée avec « aucune ». Enregistré dans `summaryMarkdown`.
+- `summarize` : six sections imposées dans l'ordre (`## En bref`, `## Qui a dit quoi`, `## Décisions`, `## Par thème`, `## Prochaines étapes`, `## Questions ouvertes`) ; une section manquante est ajoutée avec « aucune ». Enregistré dans `summaryMarkdown`.
 - `ask` : avec `meetingID`, contexte = transcript complet ; sans, `store.search()` (mots significatifs ensemble, puis chacun séparément) étendu à ± 2 segments voisins et groupé par réunion. Question et réponse archivées dans `chat`. Bloc de citations absent ou cassé = réponse sans citations, jamais d'erreur.
 
 ### `Sources/notekeeper-mcp/`

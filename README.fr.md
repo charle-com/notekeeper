@@ -12,7 +12,7 @@ Clone libre de Wispr Flow Notetaker. Fonctionne avec Zoom, Google Meet, Teams, F
 - **Transcription locale** : Whisper large-v3-turbo par WhisperKit, sur le Neural Engine. L'audio ne quitte jamais le Mac.
 - **Qui a dit quoi** : ta piste porte ton nom ; les autres voix sont séparées par diarisation (FluidAudio, modèles pyannote et WeSpeaker en CoreML), puis nommées par le LLM à partir des invités du calendrier, du dictionnaire personnel et de ce qui se dit (« merci Priya »). Un clic pour corriger, tout le transcript suit.
 - **Résumé structuré** : en bref, décisions, points par thème, prochaines étapes (qui, quoi, quand), questions ouvertes.
-- **Qu'est-ce que j'ai raté ?** : pendant la réunion, un résumé des dernières minutes en trois lignes.
+- **Léger pendant l'appel** : par défaut seul l'audio est enregistré, Whisper se charge à la fin puis se décharge. Le transcript en direct et « Qu'est-ce que j'ai raté ? » (résumé des dernières minutes) s'activent dans les réglages, au prix d'environ 1 Go de mémoire résidente.
 - **Demander** : une question sur une réunion ou sur tout l'historique, réponse avec citations cliquables qui ouvrent le passage.
 - **Mes notes** : un éditeur markdown à côté du transcript.
 - **Détection d'appel** : Notekeeper voit quelle app utilise le micro et propose d'enregistrer. Le calendrier fournit le titre et les invités.

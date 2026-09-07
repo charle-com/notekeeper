@@ -17,6 +17,10 @@ struct TranscriptView: View {
                         Text(model.selectedMeeting?.status == .processing ? "Retranscription en cours…" : "Aucun transcript.")
                             .foregroundStyle(.secondary).padding(.top, 30)
                     }
+                    if turns.isEmpty, model.isRecording, !model.liveEnabled, model.recording?.meetingID == model.selectedMeetingID {
+                        Text("Enregistrement en cours. Le transcript et le compte rendu arrivent à la fin de l'appel.")
+                            .foregroundStyle(.secondary).padding(.top, 30)
+                    }
                     ForEach(turns) { seg in
                         TurnView(segment: seg, highlighted: highlight == seg.id).id(seg.id)
                     }

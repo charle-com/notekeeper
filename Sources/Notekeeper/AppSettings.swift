@@ -37,6 +37,13 @@ enum AppSettings {
         get { d.object(forKey: "askOnCall") == nil ? true : d.bool(forKey: "askOnCall") }
         set { d.set(newValue, forKey: "askOnCall") }
     }
+    /// Transcription pendant l'appel (Whisper résident, hypothèses en direct, « Qu'est-ce que j'ai raté ? »).
+    /// Désactivée par défaut : pendant l'appel on n'écrit que les WAV, les moteurs se chargent à la fin et se
+    /// déchargent une fois le compte rendu produit. Toujours active en mode maquette (recette).
+    static var liveTranscription: Bool {
+        get { useMocks ? true : d.bool(forKey: "liveTranscription") }
+        set { d.set(newValue, forKey: "liveTranscription") }
+    }
     static var onboardingDone: Bool {
         get { d.bool(forKey: "onboardingDone") }
         set { d.set(newValue, forKey: "onboardingDone") }
